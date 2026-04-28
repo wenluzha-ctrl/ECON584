@@ -5,14 +5,17 @@ df <- read.csv("final dataset.csv", stringsAsFactors = FALSE)
 requested <- c("n_highend_stores","median_household_income","fmr_2br_2026_rent","population_density")
 setdiff(requested, colnames(df))
 df_safe <- df[, intersect(colnames(df), requested), drop = FALSE]
-
+library(dplyr)
+df %>% select(any_of(requested))
 df <- df[, c("n_highend_stores",
              "median_household_income",
-             "fmr_2br_2026",
+             "fmr_2br_2026_rent",
+             "population_density",
+             "median_age",
              "competitor_count")]
 df <- na.omit(df)
 df$log_income <- log(df$median_household_income)
-df$log_rent   <- log(df$fmr_2br_2026)
+df$log_rent   <- log(df$fmr_2br_2026_rent)
 model <- lm(n_highend_stores ~ log_income + log_rent + population_density + median_age + competitor_count, data = df)
 summary(model)
 
