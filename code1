@@ -1,7 +1,11 @@
 setwd("~/Desktop")
 list.files()            # should show "la_grocery_dataset.csv"
-file.exists("dataset.csv")  # returns TRUE if present
-df <- read.csv("dataset.csv", stringsAsFactors = FALSE)
+file.exists("final dataset.csv")  # returns TRUE if present
+df <- read.csv("final dataset.csv", stringsAsFactors = FALSE)
+requested <- c("n_highend_stores","median_household_income","fmr_2br_2026_rent","population_density")
+setdiff(requested, colnames(df))
+df_safe <- df[, intersect(colnames(df), requested), drop = FALSE]
+
 df <- df[, c("n_highend_stores",
              "median_household_income",
              "fmr_2br_2026",
@@ -9,7 +13,7 @@ df <- df[, c("n_highend_stores",
 df <- na.omit(df)
 df$log_income <- log(df$median_household_income)
 df$log_rent   <- log(df$fmr_2br_2026)
-model <- lm(n_highend_stores ~ log_income + log_rent + competitor_count, data = df)
+model <- lm(n_highend_stores ~ log_income + log_rent + population_density + median_age + competitor_count, data = df)
 summary(model)
 
 library(sandwich); library(lmtest)
