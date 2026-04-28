@@ -1,0 +1,16 @@
+setwd("~/Desktop")
+list.files()            # should show "la_grocery_dataset.csv"
+file.exists("dataset.csv")  # returns TRUE if present
+df <- read.csv("dataset.csv", stringsAsFactors = FALSE)
+df <- df[, c("n_highend_stores",
+             "median_household_income",
+             "fmr_2br_2026",
+             "competitor_count")]
+df <- na.omit(df)
+df$log_income <- log(df$median_household_income)
+df$log_rent   <- log(df$fmr_2br_2026)
+model <- lm(n_highend_stores ~ log_income + log_rent + competitor_count, data = df)
+summary(model)
+
+library(sandwich); library(lmtest)
+coeftest(model, vcov = vcovHC(model, type = "HC1"))
