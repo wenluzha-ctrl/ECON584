@@ -7,12 +7,12 @@ install.packages(setdiff(required, installed.packages()[,"Package"]), repos = "h
 library(dplyr); library(MASS); library(car); library(pscl); library(sandwich); library(lmtest)
 
 # Read data
-df <- read.csv("dataset.csv", stringsAsFactors = FALSE)
+df <- read.csv("final dataset.csv", stringsAsFactors = FALSE)
 
 # Keep relevant vars and drop missing
 df <- df %>%
-  select(n_highend_stores, median_household_income, fmr_2br_2026, competitor_count) %>%
-  filter(!is.na(n_highend_stores) & !is.na(median_household_income) & !is.na(fmr_2br_2026) & !is.na(competitor_count))
+  select(n_highend_stores, median_household_income, fmr_2br_2026_rent, population_density, median_age, competitor_count) %>%
+  filter(!is.na(n_highend_stores) & !is.na(median_household_income) & !is.na(fmr_2br_2026_rent) & !is.na(competitor_count) & !is.na(population_density) & !is.na(median_age))
 
 # Dependent variable summary: mean and variance
 mean_y <- mean(df$n_highend_stores)
@@ -29,10 +29,10 @@ print(disp_test)
 # Log transforms for continuous predictors (if desired)
 df <- df %>%
   mutate(log_income = log(median_household_income),
-         log_rent   = log(fmr_2br_2026))
+         log_rent   = log(fmr_2br_2026_rent))
 
 # Multicollinearity diagnosis: correlation matrix among independents
-indep <- df %>% select(log_income, log_rent, competitor_count)
+indep <- df %>% select(log_income, log_rent, population_density, median_age, competitor_count)
 cor_mat <- cor(indep, use = "pairwise.complete.obs")
 print(cor_mat)
 
@@ -41,26 +41,26 @@ high_corr_pairs <- which(abs(cor_mat) > 0.8 & abs(cor_mat) < 1, arr.ind = TRUE)
 if (nrow(high_corr_pairs)==0) cat("No pairs with |corr| > 0.8\n") else print(high_corr_pairs)
 
 # VIF calculation: need a linear model with same regressors
-vif_model <- lm(n_highend_stores ~ log_income + log_rent + competitor_count, data = df)
+vif_model <- lm(n_highend_stores ~ log_income + log_rent + population_density + median_age + competitor_count, data = df)
 vif_values <- vif(vif_model)
 print(vif_values)
 # Typical rule: VIF > 5 (or 10) indicates multicollinearity concerns
 
 # Multicollinearity treatment examples:
 # Option A: remove one of highly correlated vars (choose based on domain)
-df_a <- df %>% select(n_highend_stores, log_income, competitor_count)  # removed log_rent example
+df_a <- df %>% select(n_highend_stores, log_income, population_density, median_age, competitor_count)  # removed log_rent example
 
 # Option B: combine into an affluence index using PCA (first PC)
 pca_res <- prcomp(df %>% select(log_income, log_rent), scale. = TRUE)
 df$affluence_pc1 <- pca_res$x[,1]   # first principal component as index
 
 # Check VIF after treatment (example using affluence_pc1)
-vif_model_pc <- lm(n_highend_stores ~ affluence_pc1 + competitor_count, data = df)
+vif_model_pc <- lm(n_highend_stores ~ affluence_pc1 + population_density + median_age + competitor_count, data = df)
 print(vif(vif_model_pc))
 
 # Choose the refined set of regressors (pick either df_a or df with affluence_pc1)
 # Here we run Negative Binomial with affluence_pc1 + competitor_count
-nb_model <- glm.nb(n_highend_stores ~ affluence_pc1 + competitor_count, data = df)
+nb_model <- glm.nb(n_highend_stores ~ affluence_pc1 + population_density + median_age + competitor_count, data = df)
 summary(nb_model)
 
 # Robust (sandwich) SEs for NB (coeftest)
@@ -69,62 +69,14 @@ vcov_nb_robust <- vcovHC(nb_model, type = "HC1")
 coeftest(nb_model, vcov. = vcov_nb_robust)
 
 # If you prefer NB after removing log_rent (Option A)
-nb_model_a <- glm.nb(n_highend_stores ~ log_income + competitor_count, data = df)
+nb_model_a <- glm.nb(n_highend_stores ~ log_income + population_density + median_age + competitor_count, data = df)
 summary(nb_model_a)
 coeftest(nb_model_a, vcov. = vcovHC(nb_model_a, type = "HC1"))
 
 # Model comparison: Likelihood ratio test between Poisson and NB
-poisson_full <- glm(n_highend_stores ~ affluence_pc1 + competitor_count, family = poisson, data = df)
+poisson_full <- glm(n_highend_stores ~ affluence_pc1 + population_density + median_age + competitor_count, family = poisson, data = df)
 lr_test <- lrtest(nb_model, poisson_full)  # requires MASS + lmtest
 print(lr_test)
 
 # Final notes printed
 cat("\nModels estimated: nb_model (PCA index) and nb_model_a (log_income only). Choose based on VIF, interpretability, and goodness-of-fit.\n")
-
-下面是我尝试弄点图但是我这搞不出来你看看
-
-# Install/load packages
-pkgs <- c("dplyr","MASS","ggplot2","GGally","car","lmtest","sandwich","gridExtra","viridis")
-install.packages(setdiff(pkgs, installed.packages()[, "Package"]), repos = "https://cloud.r-project.org")
-library(dplyr); library(MASS); library(ggplot2); library(GGally); library(car)
-library(lmtest); library(sandwich); library(gridExtra); library(viridis)
-
-# Read and prepare data
-df <- read.csv("dataset.csv", stringsAsFactors = FALSE) %>%
-  select(n_highend_stores, median_household_income, fmr_2br_2026, competitor_count) %>%
-  filter(!is.na(n_highend_stores) & !is.na(median_household_income) & !is.na(fmr_2br_2026) & !is.na(competitor_count)) %>%
-  mutate(log_income = log(median_household_income),
-         log_rent   = log(fmr_2br_2026))
-
-# Dependent variable: mean & variance
-mean_y <- mean(df$n_highend_stores); var_y <- var(df$n_highend_stores)
-
-# PCA affluence index
-pca_res <- prcomp(df %>% select(log_income, log_rent), scale. = TRUE)
-df$affluence_pc1 <- pca_res$x[,1]
-
-# Fit Negative Binomial (affluence index + competitor_count)
-nb_model <- glm.nb(n_highend_stores ~ affluence_pc1 + competitor_count, data = df)
-
-getwd()
-list.files()
-file.exists("dataset.csv")
-df <- read.csv("dataset.csv", stringsAsFactors = FALSE)
-dim(df)
-head(df)
-
-df2 <- df[complete.cases(df[c("n_highend_stores","median_household_income","fmr_2br_2026","competitor_count")]), ]
-ggplot(df2, aes(x = n_highend_stores)) + geom_bar() + ggtitle("Test: n_highend_stores")
-
-# 1) Histogram of dependent variable (counts)
-p1 <- ggplot(df, aes(x = n_highend_stores)) +
-  geom_bar(fill = "#2c7fb8") +
-  labs(title = "Distribution of n_highend_stores", x = "n_highend_stores", y = "Count") +
-  theme_minimal()
-print(p1))
-# 2) Mean vs Variance bar plot
-mv <- data.frame(stat = c("mean", "variance"), value = c(mean_y, var_y))
-p2 <- ggplot(mv, aes(x = stat, y = value, fill = stat)) +
-  geom_col() + scale_fill_viridis(discrete = TRUE) +
-  labs(title = "Mean vs Variance of Dependent Variable", y = "Value") +
-  theme_minimal() + theme(legend.position = "none")
